@@ -34,7 +34,7 @@ namespace BlokChein.Models
                 Index = 0,
                 Transactions = new List<Transaction>
                 {
-                    new Transaction("System", "Genesis", 50)
+                    new Transaction("Alice", "Bob", 50m, TransactionType.Transfer)
                 },
                 PrevHash = "0",
                 Difficulty = Difficulty,

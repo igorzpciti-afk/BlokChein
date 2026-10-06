@@ -101,7 +101,29 @@ namespace BlokChein.Services
             }
         }
 
-        // Допоміжний метод для форматованого виводу
+        //фільтрація та вивід за типами ( Type)
+        public void PrintTransactionsByType(List<Block> chain)
+        {
+            var allTransactions = chain.SelectMany(b => b.Transactions).ToList();
+
+            foreach (TransactionType type in Enum.GetValues(typeof(TransactionType)))
+            {
+                Console.WriteLine($"\n=== Список транзакцій типу {type} ===");
+                var filteredList = allTransactions.Where(t => t.Type == type).ToList();
+
+                if (filteredList.Count == 0)
+                {
+                    Console.WriteLine("Транзакції цього типу відсутні.");
+                    continue;
+                }
+
+                foreach (var tx in filteredList)
+                {
+                    Console.WriteLine($"From: {tx.From} | To: {tx.To} | Amount: {tx.Amount} | Type: {tx.Type}");
+                }
+            }
+        }
+
         private void PrintTx(int blockIndex, Transaction tx)
         {
             Console.WriteLine($"[Блок #{blockIndex}] Id: {tx.Id} | Від: {tx.From} | До: {tx.To} | Сума: {tx.Amount}");

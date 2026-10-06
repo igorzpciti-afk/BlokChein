@@ -2,8 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace BlokChein.Services
 {
@@ -29,6 +27,38 @@ namespace BlokChein.Services
                     }
                 }
                 Console.WriteLine("--------------------------------------------------");
+            }
+        }
+
+        public void ShowTransactionsByType(List<Block> chain, TransactionType? targetType = null)
+        {
+            var allTransactions = chain.SelectMany(b => b.Transactions).ToList();
+
+            if (allTransactions.Count == 0)
+            {
+                Console.WriteLine("У блокчейні ще немає транзакцій.");
+                return;
+            }
+
+            var typesToDisplay = targetType.HasValue
+                ? new[] { targetType.Value }
+                : Enum.GetValues(typeof(TransactionType)).Cast<TransactionType>();
+
+            foreach (var type in typesToDisplay)
+            {
+                Console.WriteLine($"\n=== Список транзакцій типу {type} ===");
+                var filtered = allTransactions.Where(t => t.Type == type).ToList();
+
+                if (filtered.Count == 0)
+                {
+                    Console.WriteLine("Транзакції цього типу відсутні.");
+                    continue;
+                }
+
+                foreach (var tx in filtered)
+                {
+                    Console.WriteLine($"[ID: {tx.Id}] From: {tx.From} | To: {tx.To} | Amount: {tx.Amount} | Type: {tx.Type}");
+                }
             }
         }
     }

@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using BlokChein;
 using BlokChein.Models;
 using BlokChein.Services;
-
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
@@ -13,9 +13,22 @@ var explorer = new CryptoExplorerService();
 
 var pendingTransactions = new List<Transaction>();
 
-var b1Tx = new List<Transaction> { new("Alice", "Bob", 50m), new("Bob", "Charlie", 150m) };
-var b2Tx = new List<Transaction> { new("Charlie", "Alice", 200m), new("Dave", "Bob", 30m) };
-var b3Tx = new List<Transaction> { new("Alice", "Dave", 500m) };
+var b1Tx = new List<Transaction>
+{
+    new("Alice", "Bob", 50m, TransactionType.Transfer),
+    new("Bob", "Charlie", 150m, TransactionType.Purchase)
+};
+
+var b2Tx = new List<Transaction>
+{
+    new("Charlie", "Alice", 200m, TransactionType.Gift),
+    new("Dave", "Bob", 30m, TransactionType.Transfer)
+};
+
+var b3Tx = new List<Transaction>
+{
+    new("Alice", "Dave", 500m, TransactionType.Purchase)
+};
 
 testBlockChain.AddBlock(b1Tx);
 testBlockChain.AddBlock(b2Tx);
@@ -29,7 +42,8 @@ while (true)
     Console.WriteLine("3. Показати весь блокчейн");
     Console.WriteLine("4. Перевірити цілісність");
     Console.WriteLine("5. Пошук транзакцій (Crypto Explorer)");
-    Console.WriteLine("6. Вихід");
+    Console.WriteLine("6. Перегляд транзакцій за типами (Transfer, Purchase, Gift)");
+    Console.WriteLine("7. Вихід");
     Console.Write("Ваш вибір: ");
 
     var choice = Console.ReadLine();
@@ -64,10 +78,24 @@ while (true)
                     break;
                 }
 
-                var newTx = transactionService.CreateTransaction(sender, recipient, amount);
+                Console.WriteLine("Виберіть тип транзакції:");
+                Console.WriteLine("1. Transfer");
+                Console.WriteLine("2. Purchase");
+                Console.WriteLine("3. Gift");
+                Console.Write("Ваш вибір (1-3): ");
+
+                string typeChoice = Console.ReadLine() ?? "";
+                TransactionType type = typeChoice switch
+                {
+                    "2" => TransactionType.Purchase,
+                    "3" => TransactionType.Gift,
+                    _ => TransactionType.Transfer
+                };
+
+                var newTx = new Transaction(sender, recipient, amount, type);
                 pendingTransactions.Add(newTx);
 
-                Console.WriteLine("Транзакцію успішно додано до пулу очікування!");
+                Console.WriteLine($"Транзакцію [{type}] успішно додано до пулу очікування!");
             }
             catch (Exception ex)
             {
@@ -131,6 +159,36 @@ while (true)
             break;
 
         case "6":
+            Console.WriteLine("\n--- ФІЛЬТРАЦІЯ ТРАНЗАКЦІЙ ЗА ТИПОМ ---");
+            Console.WriteLine("1. Переглянути тільки Transfer");
+            Console.WriteLine("2. Переглянути тільки Purchase");
+            Console.WriteLine("3. Переглянути тільки Gift");
+            Console.WriteLine("4. Вивести УСІ (згруповано за типами)");
+            Console.Write("Ваш вибір (1-4): ");
+
+            string filterChoice = Console.ReadLine() ?? "";
+
+            switch (filterChoice)
+            {
+                case "1":
+                    displayService.ShowTransactionsByType(testBlockChain.Chain, TransactionType.Transfer);
+                    break;
+                case "2":
+                    displayService.ShowTransactionsByType(testBlockChain.Chain, TransactionType.Purchase);
+                    break;
+                case "3":
+                    displayService.ShowTransactionsByType(testBlockChain.Chain, TransactionType.Gift);
+                    break;
+                case "4":
+                    displayService.ShowTransactionsByType(testBlockChain.Chain, null);
+                    break;
+                default:
+                    Console.WriteLine("Невірний вибір опції фільтрації.");
+                    break;
+            }
+            break;
+
+        case "7":
             return;
 
         default:

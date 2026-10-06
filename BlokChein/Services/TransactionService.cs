@@ -9,9 +9,9 @@ namespace BlokChein.Services
 {
     public class TransactionService
     {
-        public Transaction CreateTransaction(string from, string to, decimal amount)
+        public Transaction CreateTransaction(string from, string to, decimal amount, TransactionType type = TransactionType.Transfer)
         {
-            var tx = new Transaction(from, to, amount);
+            var tx = new Transaction(from, to, amount, type);
             var (isValid, message) = ValidateTransaction(tx);
             if (!isValid)
             {
