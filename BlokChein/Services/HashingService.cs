@@ -5,14 +5,20 @@ using System.Security.Cryptography;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using BlokChein.Models;
+using System.Linq;
 
 namespace BlokChein.Services
 {
     public class HashingService
     {
+    
         public string ComputeHash(Block block)
         {
-            string rawData = $"{block.Index}{block.Data}{block.Timestamp.ToString("o")}{block.PrevHash}{block.Author}{block.Nonce}";
+            var transactionsRaw = string.Join("", block.Transactions.Select(t => t.ToRawString()));
+            var transactionsHash = ComputeSha256(transactionsRaw);
+
+            string rawData = $"{block.Index}{transactionsHash}{block.Timestamp}{block.PrevHash}{block.Nonce}{block.Difficulty}";
             return ComputeSha256(rawData);
         }
 

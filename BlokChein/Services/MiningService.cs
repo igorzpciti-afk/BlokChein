@@ -1,47 +1,37 @@
-﻿using System;
+﻿using BlokChein.Models;
+using BlokChein.Services;
 using System.Diagnostics;
-using System.Text;
-using BlokChein.Models;
 
 namespace BlokChein.Services
 {
     public class MiningService
     {
-        private readonly HashingService _hashingService;
+        private readonly HashingService _hashingService = new HashingService();
 
-        public MiningService()
+        public void MineBlock(Block block, int difficulty)
         {
-            _hashingService = new HashingService();
-        }
 
-        public (long attempts, TimeSpan timeTaken) MineBlock (Block block, string name)
-        {
-            string hexName = Convert.ToHexString(Encoding.UTF8.GetBytes(name)).ToLower();
-
-            string targetHex = hexName.Length >= 4 ? hexName[..4] : hexName.Substring(0, 4);
-
-            Stopwatch timer = Stopwatch.StartNew();
-
-            long initialNonce = block.Nonce;
-
-
-            Console.WriteLine($"Mining for '{name}' (Searching Hex pattern for letters: '{targetHex}')...");
+            string target = new string('0', difficulty);
+            var sw = Stopwatch.StartNew();
 
             while (true)
             {
                 block.Hash = _hashingService.ComputeHash(block);
 
-                if (block.Hash.ToLower().Contains(targetHex))
+                if (block.Hash.StartsWith(target))
                 {
+                    sw.Stop();
+                    block.MiningDuration = sw.Elapsed.TotalSeconds;
                     break;
                 }
 
                 block.Nonce++;
 
-            }
-                    timer.Stop();
-                    long totalAttempts = block.Nonce - initialNonce + 1;
-                    return (totalAttempts, timer.Elapsed);
+                if (block.Nonce % 100000 == 0)
+                {
+                    Console.WriteLine($"Mining in progress... Current Nonce: {block.Nonce:N0}, Current Hash: {block.Hash}");
                 }
             }
         }
+    }
+}

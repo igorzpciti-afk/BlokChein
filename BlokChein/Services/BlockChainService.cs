@@ -1,125 +1,109 @@
-﻿using BlokChein.Models;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using BlokChein.Services;
 
-namespace BlokChein.Services
+
+
+namespace BlokChein.Models
 {
     public class BlockChainService
     {
         public List<Block> Chain { get; set; }
+        public int Difficulty { get; set; } = 4;
 
-        public readonly MiningService _miningService = new MiningService();
-        private readonly HashingService _hashingService = new HashingService();
+        private readonly double _targetBlockTime; // в миллисекундах или секундах
+        private readonly int _adjustmentInterval;
+        private readonly MiningService _miningService;
+        private readonly HashingService _hashingService;
 
-        // Тепер тут вказано "Igor"
-        public string Name { get; set; } = "Igor";
-
-        public BlockChainService()
+        public BlockChainService(int difficulty, double targetBlockTime, int adjustmentInterval)
         {
+            this.Difficulty = difficulty;
+            this._targetBlockTime = targetBlockTime;
+            this._adjustmentInterval = adjustmentInterval;
+
+            _hashingService = new HashingService();
+            _miningService = new MiningService();
             Chain = new List<Block>();
+
             AddGenesisBlock();
         }
 
         private void AddGenesisBlock()
         {
-            var genesis = new Block()
+            var genesisBlock = new Block
             {
-                Data = "0",
                 Index = 0,
-                Timestamp = DateTime.Parse("1.01.1900"),
+                Transactions = new List<Transaction>
+                {
+                    new Transaction("System", "Genesis", 50)
+                },
                 PrevHash = "0",
-                Author = "System"
+                Difficulty = Difficulty,
+                Timestamp = DateTime.UtcNow
             };
 
-            _miningService.MineBlock(genesis, Name);
-            Chain.Add(genesis);
+            _miningService.MineBlock(genesisBlock, Difficulty);
+            Chain.Add(genesisBlock);
         }
 
-        public void AddBlock(string data, string author = "User")
+        public void AddBlock(List<Transaction> transactions)
         {
-            var lastBlock = Chain[^1];
-            var newBlock = new Block()
+            Block lastBlock = Chain[^1];
+
+            var newBlock = new Block
             {
                 Index = lastBlock.Index + 1,
-                Data = data,
-                Timestamp = DateTime.UtcNow,
+                Transactions = transactions,
                 PrevHash = lastBlock.Hash,
-                Author = author
+                Difficulty = Difficulty,
+                Timestamp = DateTime.UtcNow
             };
 
-            _miningService.MineBlock(newBlock, Name);
+            _miningService.MineBlock(newBlock, Difficulty);
             Chain.Add(newBlock);
-        }
 
-        public void CorruptBlock(int index, string newData)
-        {
-            if (index >= 0 && index < Chain.Count)
+        
+            if (newBlock.Index % _adjustmentInterval == 0)
             {
-                Chain[index].Data = newData;
+                AdjustDifficulty();
             }
         }
 
-        public (long attempts, TimeSpan timeTaken) RemineSingleBlock(int index)
+        private void AdjustDifficulty()
         {
-            if (index < 0 || index >= Chain.Count) return (0, TimeSpan.Zero);
+            var recentBlocks = Chain.Where(b => b.Index > 0).TakeLast(_adjustmentInterval).ToList();
+            if (recentBlocks.Count == 0) return;
 
-            Chain[index].Nonce = 0;
-            return _miningService.MineBlock(Chain[index], Name);
-        }
+            var avgTime = recentBlocks.Average(b => b.MiningDuration);
 
-        public (long totalAttempts, TimeSpan totalTime) RepairChainFrom(int startIndex)
-        {
-            long totalAttempts = 0;
-            TimeSpan totalTime = TimeSpan.Zero;
-
-            for (int i = startIndex; i < Chain.Count; i++)
+            if (avgTime < _targetBlockTime)
             {
-                if (i > 0)
-                {
-                    Chain[i].PrevHash = Chain[i - 1].Hash;
-                }
-
-                Chain[i].Nonce = 0;
-                var (attempts, timeTaken) = _miningService.MineBlock(Chain[i], Name);
-
-                totalAttempts += attempts;
-                totalTime += timeTaken;
+                Difficulty++;
+                Console.WriteLine($"Difficulty increased to {Difficulty}");
             }
-
-            return (totalAttempts, totalTime);
+            else if (avgTime > _targetBlockTime)
+            {
+                Difficulty = Math.Max(1, Difficulty - 1);
+                Console.WriteLine($"Difficulty decreased to {Difficulty}");
+            }
         }
 
         public bool IsValid()
         {
-            string hexName = Convert.ToHexString(Encoding.UTF8.GetBytes(Name)).ToLower();
-            string targetHex = hexName.Length >= 4 ? hexName[..4] : hexName;
-
-            for (int i = 0; i < Chain.Count; i++) // Перевіряємо ВСІ блоки, включаючи Genesis (i = 0)
+            for (int i = 1; i < Chain.Count; i++)
             {
                 var currentBlock = Chain[i];
+                var prevBlock = Chain[i - 1];
 
-                // 1. Перевірка хешу самого блоку
-                if (currentBlock.Hash != _hashingService.ComputeHash(currentBlock))
-                {
+                string currentHash = _hashingService.ComputeHash(currentBlock);
+                if (currentBlock.Hash != currentHash)
                     return false;
-                }
 
-                // 2. Перевірка зв'язку з попереднім блоком
-                if (i > 0)
-                {
-                    var prevBlock = Chain[i - 1];
-                    if (prevBlock.Hash != currentBlock.PrevHash)
-                    {
-                        return false;
-                    }
-                }
-
-                // 3. Перевірка наявності цільового паттерну в хеші
-                if (!currentBlock.Hash.ToLower().Contains(targetHex))
-                {
+                if (prevBlock.Hash != currentBlock.PrevHash)
                     return false;
-                }
+
+                string target = new string('0', currentBlock.Difficulty);
+                if (!currentBlock.Hash.StartsWith(target))
+                    return false;
             }
 
             return true;
