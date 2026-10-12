@@ -5,7 +5,6 @@ namespace BlokChein.Services
 {
     public class CryptoExplorerService
     {
-        // 1. Пошук транзакції за Id
         public void FindById(List<Block> chain, string id)
         {
             bool found = false;
@@ -27,7 +26,6 @@ namespace BlokChein.Services
             }
         }
 
-        // 2. Всі транзакції певного користувача (і як відправника, і як отримувача)
         public void FindByUser(List<Block> chain, string user)
         {
             bool found = false;
@@ -50,7 +48,6 @@ namespace BlokChein.Services
             }
         }
 
-        // 3. Транзакції, сума яких більша за вказану
         public void FindGreaterThan(List<Block> chain, decimal minAmount)
         {
             bool found = false;
@@ -72,7 +69,6 @@ namespace BlokChein.Services
             }
         }
 
-        // 4. Пошук найбільшої транзакції у всьому блокчейні
         public void FindMaxTransaction(List<Block> chain)
         {
             Transaction maxTx = null;
@@ -101,29 +97,26 @@ namespace BlokChein.Services
             }
         }
 
-        //фільтрація та вивід за типами ( Type)
-        public void PrintTransactionsByType(List<Block> chain)
+        public void PrintTransactionsByType(List<Block> chain, decimal minAmount)
         {
             var allTransactions = chain.SelectMany(b => b.Transactions).ToList();
+            var filteredList = allTransactions.Where(t => t.Amount >= minAmount).ToList();
 
-            foreach (TransactionType type in Enum.GetValues(typeof(TransactionType)))
-            {
-                Console.WriteLine($"\n=== Список транзакцій типу {type} ===");
-                var filteredList = allTransactions.Where(t => t.Type == type).ToList();
+            Console.WriteLine($"\n=== Транзакції з сумою >= {minAmount} ===");
+
 
                 if (filteredList.Count == 0)
                 {
-                    Console.WriteLine("Транзакції цього типу відсутні.");
-                    continue;
+                    Console.WriteLine("Транзакцій з такою сумою немає.");
+                    return;
                 }
 
                 foreach (var tx in filteredList)
                 {
-                    Console.WriteLine($"From: {tx.From} | To: {tx.To} | Amount: {tx.Amount} | Type: {tx.Type}");
+                    Console.WriteLine($"ID: {tx.Id} | From: {tx.From} | To: {tx.To} | Amount: {tx.Amount}");
                 }
             }
-        }
-
+        
         private void PrintTx(int blockIndex, Transaction tx)
         {
             Console.WriteLine($"[Блок #{blockIndex}] Id: {tx.Id} | Від: {tx.From} | До: {tx.To} | Сума: {tx.Amount}");

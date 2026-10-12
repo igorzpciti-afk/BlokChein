@@ -1,42 +1,38 @@
-﻿namespace BlokChein.Models
-{
-    public enum TransactionType
-    {
-        Transfer,
-        Purchase,
-        Gift
-    }
+﻿using System.Text;
+using System;
 
+namespace BlokChein.Models
+{
     public class Transaction
     {
-        private static int _idCounter = 1;
-
         public string Id { get; set; }
         public string From { get; set; }
         public string To { get; set; }
         public decimal Amount { get; set; }
-        public TransactionType Type { get; set; }
         public DateTime Timestamp { get; set; }
 
-        public Transaction(string from, string to, decimal amount, TransactionType type)
+        public byte[] Signature { get; set; }
+
+        public byte[] PublicKey { get; set; }
+
+        public Transaction(string from, string to, decimal amount, byte[] publicKey)
         {
-            Id = (_idCounter++).ToString();
+            Id = Guid.NewGuid().ToString(); 
             From = from;
             To = to;
             Amount = amount;
-            Type = type;
-            Timestamp = DateTime.UtcNow;
-        }
-
-        public Transaction(string from, string to, decimal amount, DateTime timestamp, TransactionType type)
-            : this(from, to, amount, type)
-        {
-            Timestamp = timestamp;
+            Timestamp = DateTime.UtcNow; 
+            PublicKey = publicKey;
         }
 
         public string ToRawString()
         {
-            return $"[{Type}] Id: {Id} | Від: {From} | До: {To} | Сума: {Amount}";
+            return $"{Id}\t{From}\t{To}\t{Amount}\t{Timestamp}";
+        }
+
+        public byte[] GetDataToSign()
+        {
+            return Encoding.UTF8.GetBytes(ToRawString());
         }
     }
 }

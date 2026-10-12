@@ -9,7 +9,7 @@ namespace BlokChein.Models
         public List<Block> Chain { get; set; }
         public int Difficulty { get; set; } = 4;
 
-        private readonly double _targetBlockTime; // в миллисекундах или секундах
+        private readonly double _targetBlockTime; 
         private readonly int _adjustmentInterval;
         private readonly MiningService _miningService;
         private readonly HashingService _hashingService;
@@ -29,12 +29,14 @@ namespace BlokChein.Models
 
         private void AddGenesisBlock()
         {
+            byte[] systemPublicKey = new byte[] { 0x00 };
+
             var genesisBlock = new Block
             {
                 Index = 0,
                 Transactions = new List<Transaction>
                 {
-                    new Transaction("Alice", "Bob", 50m, TransactionType.Transfer)
+                    new Transaction("Alice", "Bob", 50m, systemPublicKey)
                 },
                 PrevHash = "0",
                 Difficulty = Difficulty,

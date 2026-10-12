@@ -11,55 +11,27 @@ namespace BlokChein.Services
         {
             foreach (var block in chain)
             {
-                Console.WriteLine($"Index {block.Index}");
-                Console.WriteLine($"Timestamp {block.Timestamp}");
-                Console.WriteLine($"Hash {block.Hash}");
-                Console.WriteLine($"Nonce {block.Nonce}");
-                Console.WriteLine($"Mining Duration {block.MiningDuration}");
-                Console.WriteLine($"Difficulty {block.Difficulty}");
-                Console.WriteLine($"PrevHash {block.PrevHash}");
-                if (block.Transactions != null && block.Transactions.Count > 0)
+                Console.WriteLine($"Index: {block.Index}");
+                Console.WriteLine($"Timestamp: {block.Timestamp}");
+                Console.WriteLine($"Hash: {block.Hash}");
+                Console.WriteLine($"PrevHash: {block.PrevHash}");
+                if (block.Transactions != null)
                 {
                     Console.WriteLine("Transactions:");
                     foreach (var tx in block.Transactions)
                     {
-                        Console.WriteLine($"  - {tx.ToRawString()}");
+                        Console.WriteLine($"  - From: {tx.From} | To: {tx.To} | Amount: {tx.Amount}");
                     }
                 }
                 Console.WriteLine("--------------------------------------------------");
             }
         }
 
-        public void ShowTransactionsByType(List<Block> chain, TransactionType? targetType = null)
+        public void ShowWallet(Wallet w1)
         {
-            var allTransactions = chain.SelectMany(b => b.Transactions).ToList();
-
-            if (allTransactions.Count == 0)
-            {
-                Console.WriteLine("У блокчейні ще немає транзакцій.");
-                return;
-            }
-
-            var typesToDisplay = targetType.HasValue
-                ? new[] { targetType.Value }
-                : Enum.GetValues(typeof(TransactionType)).Cast<TransactionType>();
-
-            foreach (var type in typesToDisplay)
-            {
-                Console.WriteLine($"\n=== Список транзакцій типу {type} ===");
-                var filtered = allTransactions.Where(t => t.Type == type).ToList();
-
-                if (filtered.Count == 0)
-                {
-                    Console.WriteLine("Транзакції цього типу відсутні.");
-                    continue;
-                }
-
-                foreach (var tx in filtered)
-                {
-                    Console.WriteLine($"[ID: {tx.Id}] From: {tx.From} | To: {tx.To} | Amount: {tx.Amount} | Type: {tx.Type}");
-                }
-            }
+            Console.WriteLine($"Wallet Name: {w1.Name}");
+            Console.WriteLine($"Wallet Address: {w1.Address}");
+            Console.WriteLine($"Public Key: {Convert.ToBase64String(w1.PublicKey)}");
         }
     }
 }

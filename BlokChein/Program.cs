@@ -6,193 +6,77 @@ using BlokChein.Services;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-var displayService = new DisplayService();
-var testBlockChain = new BlockChainService(1, 10000, 2);
-var transactionService = new TransactionService();
-var explorer = new CryptoExplorerService();
 
-var pendingTransactions = new List<Transaction>();
+        var displayService = new DisplayService();
+        var testBlockChain = new BlockChainService(4, 10000, 2);
+        var transactionService = new TransactionService();
+        var walletService = new WalletService();
 
-var b1Tx = new List<Transaction>
-{
-    new("Alice", "Bob", 50m, TransactionType.Transfer),
-    new("Bob", "Charlie", 150m, TransactionType.Purchase)
-};
+       
+        var walletA = walletService.CreateWallet("Alice");
+        var walletB = walletService.CreateWallet("Bob");
 
-var b2Tx = new List<Transaction>
-{
-    new("Charlie", "Alice", 200m, TransactionType.Gift),
-    new("Dave", "Bob", 30m, TransactionType.Transfer)
-};
+        Console.WriteLine($"Створено гаманець 1: {walletA.Name} (Адреса: {walletA.Address})");
+        Console.WriteLine($"   -> Публічний ключ: {Convert.ToBase64String(walletA.PublicKey)}");
+        Console.WriteLine($"Створено гаманець 2: {walletB.Name} (Адреса: {walletB.Address})");
+        Console.WriteLine($"   -> Публічний ключ: {Convert.ToBase64String(walletB.PublicKey)}\n");
 
-var b3Tx = new List<Transaction>
-{
-    new("Alice", "Dave", 500m, TransactionType.Purchase)
-};
+     
+        // ВИКОНАННЯ ДОМАШНЬОГО ЗАВДАННЯ
+        Console.WriteLine("=== ПЕРЕВІРКА ЦИФРОВИХ ПІДПИСІВ (ECDSA) ===");
 
-testBlockChain.AddBlock(b1Tx);
-testBlockChain.AddBlock(b2Tx);
-testBlockChain.AddBlock(b3Tx);
+        var testTx = transactionService.CreateTransaction(walletA, walletB.Address, 50m);
+        Console.WriteLine($"[ТРАНЗАКЦІЯ] Від: {walletA.Name} -> До: {walletB.Name} | Сума: {testTx.Amount} монет");
 
-while (true)
-{
-    Console.WriteLine($"\n--- МЕНЮ БЛОКЧЕЙНУ (У пулі: {pendingTransactions.Count}) ---");
-    Console.WriteLine("1. Додати блок (Замайнити транзакції з пулу)");
-    Console.WriteLine("2. Додати транзакцію");
-    Console.WriteLine("3. Показати весь блокчейн");
-    Console.WriteLine("4. Перевірити цілісність");
-    Console.WriteLine("5. Пошук транзакцій (Crypto Explorer)");
-    Console.WriteLine("6. Перегляд транзакцій за типами (Transfer, Purchase, Gift)");
-    Console.WriteLine("7. Вихід");
-    Console.Write("Ваш вибір: ");
+        bool isValid1 = walletService.VerifyTransactionSignature(testTx, walletA.PublicKey);
+        Console.WriteLine($"\n1. Перевірка правильного підпису (своїм ключем):");
+        Console.WriteLine($"Використаний ключ: {Convert.ToBase64String(walletA.PublicKey)}");
+        Console.WriteLine($"Результат:  {isValid1}");
 
-    var choice = Console.ReadLine();
+        decimal originalAmount = testTx.Amount;
+        testTx.Amount = 9999m; 
+        bool isValid2 = walletService.VerifyTransactionSignature(testTx, walletA.PublicKey);
+        Console.WriteLine($"\n2. Перевірка після зміни суми (з {originalAmount} на {testTx.Amount}):");
+        Console.WriteLine($"Використаний ключ: {Convert.ToBase64String(walletA.PublicKey)}");
+        Console.WriteLine($"Результат:  {isValid2}");
+        testTx.Amount = originalAmount;
 
-    switch (choice)
-    {
-        case "1":
-            if (pendingTransactions.Count == 0)
-            {
-                Console.WriteLine("Пул порожній! Спочатку додайте транзакцію (пункт 2).");
-                break;
-            }
+        bool isValid3 = walletService.VerifyTransactionSignature(testTx, walletB.PublicKey);
+        Console.WriteLine($"\n3. Перевірка публічним ключем іншого гаманця (Bob):");
+        Console.WriteLine($"Використаний ключ: {Convert.ToBase64String(walletB.PublicKey)}");
+        Console.WriteLine($"Результат:  {isValid3}");
+        Console.WriteLine("===========================================================\n");
 
-            testBlockChain.AddBlock(new List<Transaction>(pendingTransactions));
-            pendingTransactions.Clear();
-            Console.WriteLine("Блок успішно замайнено та додано!");
-            break;
+        while (true)
+        {
+            Console.WriteLine("\n--- МЕНЮ БЛОКЧЕЙНУ ---");
+            Console.WriteLine("1. Додати блок (з транзакціями)");
+            Console.WriteLine("2. Показати весь блокчейн");
+            Console.WriteLine("3. Перевірити цілісність");
+            Console.WriteLine("4. Вихід");
+            Console.Write("Ваш вибір: ");
 
-        case "2":
-            try
-            {
-                Console.Write("Введіть відправника (From): ");
-                string sender = Console.ReadLine() ?? "";
+            string choice = Console.ReadLine();
 
-                Console.Write("Введіть отримувача (To): ");
-                string recipient = Console.ReadLine() ?? "";
+            var tx1 = transactionService.CreateTransaction(walletA, walletB.Address, 10);
+            var tx2 = transactionService.CreateTransaction(walletB, walletA.Address, 5);
 
-                Console.Write("Введіть суму (Amount): ");
-                if (!decimal.TryParse(Console.ReadLine(), out decimal amount))
-                {
-                    Console.WriteLine("Некоректний формат суми!");
-                    break;
-                }
-
-                Console.WriteLine("Виберіть тип транзакції:");
-                Console.WriteLine("1. Transfer");
-                Console.WriteLine("2. Purchase");
-                Console.WriteLine("3. Gift");
-                Console.Write("Ваш вибір (1-3): ");
-
-                string typeChoice = Console.ReadLine() ?? "";
-                TransactionType type = typeChoice switch
-                {
-                    "2" => TransactionType.Purchase,
-                    "3" => TransactionType.Gift,
-                    _ => TransactionType.Transfer
-                };
-
-                var newTx = new Transaction(sender, recipient, amount, type);
-                pendingTransactions.Add(newTx);
-
-                Console.WriteLine($"Транзакцію [{type}] успішно додано до пулу очікування!");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Помилка додавання транзакції: {ex.Message}");
-            }
-            break;
-
-        case "3":
-            displayService.ShowChain(testBlockChain.Chain);
-            break;
-
-        case "4":
-            bool isValid = testBlockChain.IsValid();
-            Console.WriteLine($"Стан блокчейну: {(isValid ? "ВАЛІДНИЙ" : "ПОШКОДЖЕНИЙ")}");
-            break;
-
-        case "5":
-            Console.WriteLine("\n--- ПОШУК ТРАНЗАКЦІЙ (CRYPTO EXPLORER) ---");
-            Console.WriteLine("a. Знайти транзакцію за Id");
-            Console.WriteLine("b. Показати всі транзакції користувача");
-            Console.WriteLine("c. Показати транзакції більші за суму");
-            Console.WriteLine("d. Показати найбільшу транзакцію");
-            Console.Write("Ваш вибір пошуку: ");
-
-            var searchChoice = Console.ReadLine()?.ToLower();
-
-            switch (searchChoice)
-            {
-                case "a":
-                    Console.Write("Введіть Id транзакції: ");
-                    string id = Console.ReadLine() ?? "";
-                    explorer.FindById(testBlockChain.Chain, id);
-                    break;
-
-                case "b":
-                    Console.Write("Введіть ім'я користувача: ");
-                    string user = Console.ReadLine() ?? "";
-                    explorer.FindByUser(testBlockChain.Chain, user);
-                    break;
-
-                case "c":
-                    Console.Write("Введіть мінімальну суму: ");
-                    if (decimal.TryParse(Console.ReadLine(), out decimal minAmount))
-                    {
-                        explorer.FindGreaterThan(testBlockChain.Chain, minAmount);
-                    }
-                    else
-                    {
-                        Console.WriteLine("Некоректний формат суми!");
-                    }
-                    break;
-
-                case "d":
-                    explorer.FindMaxTransaction(testBlockChain.Chain);
-                    break;
-
-                default:
-                    Console.WriteLine("Невірний варіант пошуку.");
-                    break;
-            }
-            break;
-
-        case "6":
-            Console.WriteLine("\n--- ФІЛЬТРАЦІЯ ТРАНЗАКЦІЙ ЗА ТИПОМ ---");
-            Console.WriteLine("1. Переглянути тільки Transfer");
-            Console.WriteLine("2. Переглянути тільки Purchase");
-            Console.WriteLine("3. Переглянути тільки Gift");
-            Console.WriteLine("4. Вивести УСІ (згруповано за типами)");
-            Console.Write("Ваш вибір (1-4): ");
-
-            string filterChoice = Console.ReadLine() ?? "";
-
-            switch (filterChoice)
+            switch (choice)
             {
                 case "1":
-                    displayService.ShowTransactionsByType(testBlockChain.Chain, TransactionType.Transfer);
+                    testBlockChain.AddBlock(new List<Transaction> { tx1, tx2 });
                     break;
                 case "2":
-                    displayService.ShowTransactionsByType(testBlockChain.Chain, TransactionType.Purchase);
+                    displayService.ShowChain(testBlockChain.Chain);
                     break;
                 case "3":
-                    displayService.ShowTransactionsByType(testBlockChain.Chain, TransactionType.Gift);
+                    bool isValid = testBlockChain.IsValid();
+                    Console.WriteLine($"Блокчейн цілісний: {isValid}");
                     break;
                 case "4":
-                    displayService.ShowTransactionsByType(testBlockChain.Chain, null);
-                    break;
+                    return;
                 default:
-                    Console.WriteLine("Невірний вибір опції фільтрації.");
+                    Console.WriteLine("Невірний вибір. Спробуйте ще раз.");
                     break;
             }
-            break;
-
-        case "7":
-            return;
-
-        default:
-            Console.WriteLine("Невірний вибір. Спробуйте ще раз.");
-            break;
-    }
-}
+        }
