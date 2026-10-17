@@ -13,6 +13,8 @@ namespace BlokChein.Models
 
         public byte[] Signature { get; set; }
 
+        public bool IsCoinbase { get; set; }
+
         public byte[] PublicKey { get; set; }
 
         public Transaction(string from, string to, decimal amount, byte[] publicKey)
@@ -23,6 +25,8 @@ namespace BlokChein.Models
             Amount = amount;
             Timestamp = DateTime.UtcNow; 
             PublicKey = publicKey;
+            IsCoinbase = false;
+
         }
 
         public string ToRawString()

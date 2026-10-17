@@ -10,6 +10,7 @@ namespace BlokChein.Services
     public class TransactionService
     {
         private readonly WalletService _walletService = new WalletService();
+        private readonly BalanceService _balanceService = new BalanceService();
 
         public Transaction CreateTransaction(Wallet sender, string to, decimal amount)
         {
@@ -26,10 +27,24 @@ namespace BlokChein.Services
             return tx;
         }
 
+        public Transaction CreateCoinbaseTransaction(string minerAddress, decimal reward)
+        {
+            var coinbaseTx = new Transaction("Coinbase", minerAddress, reward, null)
+            {
+                IsCoinbase = true
+            };
+            return coinbaseTx;
+        }
+
         public (bool IsValid, string Message) ValidateTransaction(Transaction transaction)
         {
             if (transaction == null)
                 return (false, "Transaction is null.");
+
+            if (transaction.IsCoinbase)
+            {
+                return (true, "Coinbase");
+            }
 
             if (string.IsNullOrWhiteSpace(transaction.From))
                 return (false, "Sender address is required.");
@@ -45,6 +60,28 @@ namespace BlokChein.Services
                 return (false, "Invalid transaction signature.");
 
             return (true, "Transaction is valid.");
+        }
+
+        public (bool IsValid, string Message) ValidateTransactionWithBalance(Transaction transaction, List<Block> chain, List<Transaction> transactionPool)
+        {
+            var (isValid, message) = ValidateTransaction(transaction);
+            if (!isValid)
+            {
+                return (false, message);
+            }
+
+            if (transaction.IsCoinbase)
+            {
+                return (true, "Coinbase is valid.");
+            }
+
+            bool hasSufficientBalance = _balanceService.HasSufficientBalance(transaction.From, transaction.Amount, chain, transactionPool);
+            if (!hasSufficientBalance)
+            {
+                return (false, "Insufficient balance for the transaction.");
+            }
+
+            return (true, "Transaction is valid and has sufficient balance.");
         }
     }
 }

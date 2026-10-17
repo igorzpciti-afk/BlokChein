@@ -1,82 +1,97 @@
 ﻿using System;
 using System.Collections.Generic;
-using BlokChein;
 using BlokChein.Models;
 using BlokChein.Services;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
+var displayService = new DisplayService();
+var testBlockChain = new BlockChainService(1, 10000, 2);
+var transactionService = new TransactionService();
+var walletService = new WalletService();
+var balanceService = new BalanceService();
 
-        var displayService = new DisplayService();
-        var testBlockChain = new BlockChainService(4, 10000, 2);
-        var transactionService = new TransactionService();
-        var walletService = new WalletService();
 
-       
-        var walletA = walletService.CreateWallet("Alice");
-        var walletB = walletService.CreateWallet("Bob");
 
-        Console.WriteLine($"Створено гаманець 1: {walletA.Name} (Адреса: {walletA.Address})");
-        Console.WriteLine($"   -> Публічний ключ: {Convert.ToBase64String(walletA.PublicKey)}");
-        Console.WriteLine($"Створено гаманець 2: {walletB.Name} (Адреса: {walletB.Address})");
-        Console.WriteLine($"   -> Публічний ключ: {Convert.ToBase64String(walletB.PublicKey)}\n");
+var aliceWallet = walletService.CreateWallet("Alice");
+var bobWallet = walletService.CreateWallet("Bob");
+var charlieWallet = walletService.CreateWallet("Charlie");
+var daveWallet = walletService.CreateWallet("Dave");
 
-     
-        // ВИКОНАННЯ ДОМАШНЬОГО ЗАВДАННЯ
-        Console.WriteLine("=== ПЕРЕВІРКА ЦИФРОВИХ ПІДПИСІВ (ECDSA) ===");
+displayService.ShowWallet(aliceWallet);
+displayService.ShowWallet(bobWallet);
+displayService.ShowWallet(charlieWallet);
+displayService.ShowWallet(daveWallet);
 
-        var testTx = transactionService.CreateTransaction(walletA, walletB.Address, 50m);
-        Console.WriteLine($"[ТРАНЗАКЦІЯ] Від: {walletA.Name} -> До: {walletB.Name} | Сума: {testTx.Amount} монет");
+while (true)
+{
+    Console.WriteLine("\n1. Mine Block");
+    Console.WriteLine("2. Display Blockchain");
+    Console.WriteLine("3. Validate Blockchain");
+    Console.WriteLine("4. Show Wallet Balances");
+    Console.WriteLine("5. AddTransaction");
+    Console.WriteLine("6. Show Transaction Pool");
+    Console.WriteLine("7. Validate Economy");
+    Console.WriteLine("8. Tamper Economy (Break a Block)"); 
+    Console.WriteLine("9. Exit");
+    Console.Write("Your choice: ");
 
-        bool isValid1 = walletService.VerifyTransactionSignature(testTx, walletA.PublicKey);
-        Console.WriteLine($"\n1. Перевірка правильного підпису (своїм ключем):");
-        Console.WriteLine($"Використаний ключ: {Convert.ToBase64String(walletA.PublicKey)}");
-        Console.WriteLine($"Результат:  {isValid1}");
+    string choice = Console.ReadLine();
 
-        decimal originalAmount = testTx.Amount;
-        testTx.Amount = 9999m; 
-        bool isValid2 = walletService.VerifyTransactionSignature(testTx, walletA.PublicKey);
-        Console.WriteLine($"\n2. Перевірка після зміни суми (з {originalAmount} на {testTx.Amount}):");
-        Console.WriteLine($"Використаний ключ: {Convert.ToBase64String(walletA.PublicKey)}");
-        Console.WriteLine($"Результат:  {isValid2}");
-        testTx.Amount = originalAmount;
-
-        bool isValid3 = walletService.VerifyTransactionSignature(testTx, walletB.PublicKey);
-        Console.WriteLine($"\n3. Перевірка публічним ключем іншого гаманця (Bob):");
-        Console.WriteLine($"Використаний ключ: {Convert.ToBase64String(walletB.PublicKey)}");
-        Console.WriteLine($"Результат:  {isValid3}");
-        Console.WriteLine("===========================================================\n");
-
-        while (true)
+    try
+    {
+        switch (choice)
         {
-            Console.WriteLine("\n--- МЕНЮ БЛОКЧЕЙНУ ---");
-            Console.WriteLine("1. Додати блок (з транзакціями)");
-            Console.WriteLine("2. Показати весь блокчейн");
-            Console.WriteLine("3. Перевірити цілісність");
-            Console.WriteLine("4. Вихід");
-            Console.Write("Ваш вибір: ");
+            case "1": 
+                testBlockChain.MinePendingTransaction(aliceWallet.Address);
+                Console.WriteLine("Block successfully mined and added to the blockchain!");
+                break;
 
-            string choice = Console.ReadLine();
+            case "2":
+                displayService.ShowChain(testBlockChain.Chain);
+                break;
 
-            var tx1 = transactionService.CreateTransaction(walletA, walletB.Address, 10);
-            var tx2 = transactionService.CreateTransaction(walletB, walletA.Address, 5);
+            case "3":
+                bool isValid = testBlockChain.IsValid();
+                Console.WriteLine($"Blockchain is valid: {(isValid ? "true" : "false")}");
+                break;
 
-            switch (choice)
-            {
-                case "1":
-                    testBlockChain.AddBlock(new List<Transaction> { tx1, tx2 });
-                    break;
-                case "2":
-                    displayService.ShowChain(testBlockChain.Chain);
-                    break;
-                case "3":
-                    bool isValid = testBlockChain.IsValid();
-                    Console.WriteLine($"Блокчейн цілісний: {isValid}");
-                    break;
-                case "4":
-                    return;
-                default:
-                    Console.WriteLine("Невірний вибір. Спробуйте ще раз.");
-                    break;
-            }
+            case "4": 
+                Console.WriteLine($"Alice Balance (Available): {balanceService.GetAvailableBalance(aliceWallet.Address, testBlockChain.Chain, testBlockChain.MemPool)}");
+                Console.WriteLine($"Bob Balance (Available): {balanceService.GetAvailableBalance(bobWallet.Address, testBlockChain.Chain, testBlockChain.MemPool)}");
+                Console.WriteLine($"Charlie Balance (Available): {balanceService.GetAvailableBalance(charlieWallet.Address, testBlockChain.Chain, testBlockChain.MemPool)}");
+                Console.WriteLine($"Dave Balance (Available): {balanceService.GetAvailableBalance(daveWallet.Address, testBlockChain.Chain, testBlockChain.MemPool)}");
+                break;
+
+            case "5": 
+                var tx1 = transactionService.CreateTransaction(aliceWallet, bobWallet.Address, 10);
+                var tx2 = transactionService.CreateTransaction(bobWallet, charlieWallet.Address, 5);
+
+                testBlockChain.AddTransaction(tx1);
+                testBlockChain.AddTransaction(tx2);
+                Console.WriteLine("Transactions processed for MemPool.");
+                break;
+
+            case "6": 
+                displayService.ShowMemPool(testBlockChain.MemPool);
+                break;
+            case "7": 
+                testBlockChain.ValidateEconomy();
+                break;
+            case "8":
+                testBlockChain.TamperBlockData();
+                break;
+
+            case "9":
+                return;
+
+            default:
+                Console.WriteLine("Invalid choice. Try again.");
+                break;
         }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error: {ex.Message}");
+    }
+}

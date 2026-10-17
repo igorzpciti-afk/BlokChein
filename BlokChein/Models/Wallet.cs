@@ -17,6 +17,20 @@ namespace BlokChein.Models
 
         private byte[] PrivateKey { get; set; }
 
+        // Конструктор за замовчуванням: автоматично генерує нову пару ключів та адресу
+        // Конструктор за замовчуванням: автоматично генерує нову пару ключів та адресу
+        public Wallet()
+        {
+            using (var ecdsa = ECDsa.Create())
+            {
+                Name = "DefaultWallet";
+                PrivateKey = ecdsa.ExportECPrivateKey();
+                PublicKey = ecdsa.ExportSubjectPublicKeyInfo();
+                Address = Convert.ToHexString(PublicKey);
+            }
+        }
+
+        // Існуючий конструктор з параметрами
         public Wallet(string name, string address, byte[] publicKey, byte[] privateKey)
         {
             Name = name;

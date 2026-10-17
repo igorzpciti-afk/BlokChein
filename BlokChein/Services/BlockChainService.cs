@@ -1,18 +1,24 @@
-﻿using BlokChein.Services;
-
-
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using BlokChein.Services;
 
 namespace BlokChein.Models
 {
     public class BlockChainService
     {
         public List<Block> Chain { get; set; }
+        public List<Transaction> MemPool { get; set; } = new List<Transaction>();
         public int Difficulty { get; set; } = 4;
 
-        private readonly double _targetBlockTime; 
+        private decimal _minerReward = 50;
+
+        private readonly double _targetBlockTime;
         private readonly int _adjustmentInterval;
         private readonly MiningService _miningService;
         private readonly HashingService _hashingService;
+        private readonly TransactionService _transactionService;
+        private readonly BalanceService _balanceService;
 
         public BlockChainService(int difficulty, double targetBlockTime, int adjustmentInterval)
         {
@@ -22,6 +28,9 @@ namespace BlokChein.Models
 
             _hashingService = new HashingService();
             _miningService = new MiningService();
+            _transactionService = new TransactionService();
+            _balanceService = new BalanceService();
+
             Chain = new List<Block>();
 
             AddGenesisBlock();
@@ -36,7 +45,7 @@ namespace BlokChein.Models
                 Index = 0,
                 Transactions = new List<Transaction>
                 {
-                    new Transaction("Alice", "Bob", 50m, systemPublicKey)
+                    new Transaction("SYSTEM", "Alice", 50m, systemPublicKey)
                 },
                 PrevHash = "0",
                 Difficulty = Difficulty,
@@ -47,28 +56,103 @@ namespace BlokChein.Models
             Chain.Add(genesisBlock);
         }
 
-        public void AddBlock(List<Transaction> transactions)
-        {
-            Block lastBlock = Chain[^1];
+        //public void AddBlock(List<Transaction> transactions, string minerAddress)
+        //{
+        //    // Перевірка кожної транзакції на валідність перед додаванням
+        //    foreach (var transaction in transactions)
+        //    {
+        //        var (isValid, message) = _transactionService.ValidateTransactionWithBalance(transaction, Chain, transactions);
+        //        if (!isValid)
+        //        {
+        //            continue;
+        //        }
+        //    }
 
-            var newBlock = new Block
+        //    Block lastBlock = Chain[^1];
+
+        //    var newBlock = new Block
+        //    {
+        //        Index = lastBlock.Index + 1,
+        //        Transactions = transactions,
+        //        PrevHash = lastBlock.Hash,
+        //        Difficulty = Difficulty,
+        //        Timestamp = DateTime.UtcNow
+        //    };
+
+        //    // Створення coinbase транзакції для винагороди майнера (наприклад, 50 монет)
+        //    var coinbase = _transactionService.CreateCoinbaseTransaction(minerAddress, 50);
+        //    newBlock.Transactions.Insert(0, coinbase); // Вставляємо на першу позицію в блоці
+
+        //    _miningService.MineBlock(newBlock, Difficulty);
+        //    Chain.Add(newBlock);
+
+        //    if (newBlock.Index % _adjustmentInterval == 0)
+        //    {
+        //        AdjustDifficulty();
+        //    }
+        //}
+
+
+        public void MinePendingTransaction(string minerAddress)
+        {
+            var validTransactions = new List<Transaction>();
+
+            var tempChain = new List<Block>(Chain);
+
+            Block lastBlock = Chain[^1];
+            var simulatedTransactions = new List<Transaction>();
+
+            var coinbase = _transactionService.CreateCoinbaseTransaction(minerAddress, _minerReward);
+            simulatedTransactions.Add(coinbase);
+
+            foreach (var transaction in MemPool)
+            {
+                var (isValid, message) = _transactionService.ValidateTransactionWithBalance(transaction, Chain, simulatedTransactions);
+                if (isValid)
+                {
+                    validTransactions.Add(transaction);
+                    simulatedTransactions.Add(transaction);
+                }
+                else
+                {
+                    Console.WriteLine($"Skipping invalid transaction: {message}");
+                }
+            }
+
+            var newBlock = new Block()
             {
                 Index = lastBlock.Index + 1,
-                Transactions = transactions,
+                Transactions = validTransactions,
                 PrevHash = lastBlock.Hash,
                 Difficulty = Difficulty,
-                Timestamp = DateTime.UtcNow
             };
+
+            newBlock.Transactions.Insert(0, coinbase);
 
             _miningService.MineBlock(newBlock, Difficulty);
             Chain.Add(newBlock);
 
-        
+            MemPool.Clear();
+
             if (newBlock.Index % _adjustmentInterval == 0)
             {
                 AdjustDifficulty();
             }
         }
+
+        public bool AddTransaction(Transaction transaction)
+        {
+            var (isValid, message) = _transactionService.ValidateTransactionWithBalance(transaction, Chain, MemPool);
+            if (!isValid)
+            {
+                Console.WriteLine($"Transaction is invalid: {message}");
+                return false;
+            }
+
+            MemPool.Add(transaction);
+            return true;
+        }
+
 
         private void AdjustDifficulty()
         {
@@ -87,6 +171,94 @@ namespace BlokChein.Models
                 Difficulty = Math.Max(1, Difficulty - 1);
                 Console.WriteLine($"Difficulty decreased to {Difficulty}");
             }
+        }
+
+        public bool ValidateEconomy()
+        {
+            Dictionary<string, decimal> walletBalances = new Dictionary<string, decimal>();
+
+            if (Chain.Count > 0)
+            {
+                var genesisBlock = Chain[0];
+                foreach (var tx in genesisBlock.Transactions)
+                {
+                    if (tx.From == "SYSTEM")
+                    {
+                        if (!walletBalances.ContainsKey(tx.To))
+                            walletBalances[tx.To] = 0;
+                        walletBalances[tx.To] += tx.Amount;
+                    }
+                }
+            }
+
+            for (int i = 1; i < Chain.Count; i++)
+            {
+                var block = Chain[i];
+                int coinbaseCount = 0;
+                foreach (var tx in block.Transactions)
+                {
+                    if (tx.From == "Coinbase")
+                    {
+                        coinbaseCount++;
+
+                        if (coinbaseCount > 1)
+                        {
+                            Console.WriteLine($"Block #{block.Index} INVALID");
+                            Console.WriteLine($"Причина: Знайдено більше однієї coinbase-транзакції в блоці.");
+                            return false;
+                        }
+
+                        if (tx.Amount != _minerReward)
+                        {
+                            Console.WriteLine($"Block #{block.Index} INVALID");
+                            Console.WriteLine($"Причина: неправильна нагорода майнеру. Дозволено {_minerReward}, записано {tx.Amount}.");
+                            return false;
+                        }
+
+                        if (!walletBalances.ContainsKey(tx.To))
+                            walletBalances[tx.To] = 0;
+
+                        walletBalances[tx.To] += tx.Amount;
+                    }
+                }
+
+                foreach (var tx in block.Transactions)
+                {
+                    if (tx.From != "Coinbase")
+                    {
+                        if (tx.From == "Coinbase")
+                        {
+                            Console.WriteLine($"Block #{block.Index} INVALID");
+                            Console.WriteLine($"Причина: Звичайний користувач не може використовувати Coinbase для транзакцій.");
+                            return false;
+                        }
+
+                        if (!walletBalances.ContainsKey(tx.From))
+                            walletBalances[tx.From] = 0;
+                        if (!walletBalances.ContainsKey(tx.To))
+                            walletBalances[tx.To] = 0;
+
+                        if (walletBalances[tx.From] < tx.Amount)
+                        {
+                            Console.WriteLine($"ПОМИЛКА в блоці #{block.Index}: Відправник '{tx.From}' намагається переказати {tx.Amount} для '{tx.To}', але його баланс = {walletBalances[tx.From]}");
+                            return false;
+                        }
+
+                        walletBalances[tx.From] -= tx.Amount;
+                        walletBalances[tx.To] += tx.Amount;
+
+                        if (walletBalances[tx.From] < 0)
+                        {
+                            Console.WriteLine($"Block #{block.Index} INVALID");
+                            Console.WriteLine($"Причина: Баланс гаманця {tx.From} став від'ємним.");
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            Console.WriteLine("Blockchain economy is valid.");
+            return true;
         }
 
         public bool IsValid()
@@ -109,6 +281,26 @@ namespace BlokChein.Models
             }
 
             return true;
+        }
+
+        public void TamperBlockData()
+        {
+            var targetBlock = Chain.FirstOrDefault(b => b.Index > 0 && b.Transactions.Any(tx => tx.From != "Coinbase" && tx.From != "SYSTEM"));
+
+            if (targetBlock != null)
+            {
+                var normalTx = targetBlock.Transactions.FirstOrDefault(tx => tx.From != "Coinbase" && tx.From != "SYSTEM");
+
+                if (normalTx != null)
+                {
+                    normalTx.Amount += 1000m; 
+                    Console.WriteLine($"[УСПІХ] Дані в блоці #{targetBlock.Index} успішно пошкоджено! Суму транзакції змінено.");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Немає звичайних блоків з транзакціями для пошкодження. Додайте транзакцію через пункт 5 та змайніть блок через пункт 1!");
+            }
         }
     }
 }
