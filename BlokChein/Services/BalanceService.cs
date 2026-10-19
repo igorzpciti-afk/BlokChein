@@ -52,13 +52,9 @@ namespace BlokChein.Services
             return balance >= amount;
         }
 
-        /// <summary>
-        /// Метод для отримання доступного балансу користувача з урахуванням транзакцій, які ще не були додані до блокчейну (з пулу транзакцій). 
-        /// Метод обчислює баланс за допомогою методу GetBalance і враховує всі транзакції в пул-пулі.
-        /// </summary>
         public decimal GetAvailableBalance(string address, List<Block> chain, List<Transaction> transactionPool)
         {
-            decimal balance = GetBalance(address, chain); // Іціалізація балансу користувача за допомогою методу GetBalance, який обчислює підсумки з блокчейна
+            decimal balance = GetBalance(address, chain);
             foreach (var tx in transactionPool)
             {
                 if (tx.From == address)

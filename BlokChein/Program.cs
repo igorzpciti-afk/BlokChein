@@ -32,8 +32,9 @@ while (true)
     Console.WriteLine("5. AddTransaction");
     Console.WriteLine("6. Show Transaction Pool");
     Console.WriteLine("7. Validate Economy");
-    Console.WriteLine("8. Tamper Economy (Break a Block)"); 
-    Console.WriteLine("9. Exit");
+    Console.WriteLine("8. Tamper Economy (Break a Block)");
+    Console.WriteLine("9. Cancel Transaction from Mempool");
+    Console.WriteLine("10. Exit");
     Console.Write("Your choice: ");
 
     string choice = Console.ReadLine();
@@ -63,13 +64,58 @@ while (true)
                 Console.WriteLine($"Dave Balance (Available): {balanceService.GetAvailableBalance(daveWallet.Address, testBlockChain.Chain, testBlockChain.MemPool)}");
                 break;
 
-            case "5": 
-                var tx1 = transactionService.CreateTransaction(aliceWallet, bobWallet.Address, 10);
-                var tx2 = transactionService.CreateTransaction(bobWallet, charlieWallet.Address, 5);
+            case "5":
+                var wallets = new Dictionary<string, Wallet>
+                {
+                    { "1", aliceWallet },
+                    { "2", bobWallet },
+                    { "3", charlieWallet },
+                    { "4", daveWallet }
+                };
 
-                testBlockChain.AddTransaction(tx1);
-                testBlockChain.AddTransaction(tx2);
-                Console.WriteLine("Transactions processed for MemPool.");
+                Console.WriteLine("\n--- Select Sender (From) ---");
+                Console.WriteLine("1. Alice");
+                Console.WriteLine("2. Bob");
+                Console.WriteLine("3. Charlie");
+                Console.WriteLine("4. Dave");
+                Console.Write("Choice: ");
+                string senderChoice = Console.ReadLine();
+
+                Console.WriteLine("\n--- Select Recipient (To) ---");
+                Console.WriteLine("1. Alice");
+                Console.WriteLine("2. Bob");
+                Console.WriteLine("3. Charlie");
+                Console.WriteLine("4. Dave");
+                Console.Write("Choice: ");
+                string recipientChoice = Console.ReadLine();
+
+                if (!wallets.ContainsKey(senderChoice) || !wallets.ContainsKey(recipientChoice))
+                {
+                    Console.WriteLine("Error: Invalid wallet selection!");
+                    break;
+                }
+
+                if (senderChoice == recipientChoice)
+                {
+                    Console.WriteLine("Error: Sender and recipient cannot be the same person!");
+                    break;
+                }
+
+                Console.Write("\nEnter amount to transfer: ");
+                if (decimal.TryParse(Console.ReadLine(), out decimal amount) && amount > 0)
+                {
+                    var senderWallet = wallets[senderChoice];
+                    var recipientWallet = wallets[recipientChoice];
+
+                    var newTx = transactionService.CreateTransaction(senderWallet, recipientWallet.Address, amount);
+                    testBlockChain.AddTransaction(newTx);
+
+                    Console.WriteLine($"[SUCCESS] Transaction added to MemPool: {senderWallet.Name} -> {recipientWallet.Name} ({amount} coins)");
+                }
+                else
+                {
+                    Console.WriteLine("Error: Invalid amount enterred!");
+                }
                 break;
 
             case "6": 
@@ -81,8 +127,15 @@ while (true)
             case "8":
                 testBlockChain.TamperBlockData();
                 break;
-
             case "9":
+                Console.Write("Enter Transaction ID to cancel: ");
+                string cancelTxId = Console.ReadLine();
+
+                Console.Write("Enter your Wallet Address (who is trying to cancel): ");
+                string senderAddress = Console.ReadLine();
+                testBlockChain.CancelTransaction(cancelTxId, senderAddress);
+                break;
+            case "10":
                 return;
 
             default:

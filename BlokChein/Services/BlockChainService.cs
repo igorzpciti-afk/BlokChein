@@ -302,5 +302,26 @@ namespace BlokChein.Models
                 Console.WriteLine("Немає звичайних блоків з транзакціями для пошкодження. Додайте транзакцію через пункт 5 та змайніть блок через пункт 1!");
             }
         }
+
+        public bool CancelTransaction(string transactionId, string senderAddress)
+        {
+            var transaction = MemPool.FirstOrDefault(tx => tx.Id == transactionId);
+
+            if (transaction == null)
+            {
+                Console.WriteLine("Помилка: Транзакцію не знайдено в Mempool.");
+                return false;
+            }
+
+            if (transaction.From != senderAddress)
+            {
+                Console.WriteLine("Помилка: Недостатньо прав для скасування цієї транзакції (адреса відправника не співпадає).");
+                return false;
+            }
+
+            MemPool.Remove(transaction);
+            Console.WriteLine($"[УСПІХ] Транзакцію {transactionId} успішно скасовано та видалено з Mempool.");
+            return true;
+        }
     }
 }
