@@ -35,21 +35,23 @@ namespace BlokChein.Services
             return balance;
         }
 
-        public bool HasSufficientBalance(string address, decimal amount, List<Block> chain, List<Transaction> transactionPool)
+        public bool HasSufficientBalance(Transaction transaction, List<Block> chain, List<Transaction> transactionPool)
         {
-            decimal balance = GetBalance(address, chain);
+            decimal balance = GetBalance(transaction.From, chain);
             foreach (var tx in transactionPool)
             {
-                if (tx.From == address)
+                // Перевірка, чи адреса користувача збігається з адресою відправника транзакції. Якщо так, то сума транзакції віднімається з балансу
+                if (tx.From == transaction.From)
                 {
-                    balance -= tx.Amount;
+                    balance -= tx.Amount + tx.Fee;
                 }
-                if (tx.To == address)
+                // Перевірка, чи адреса користувача збігається з адресою отримувача транзакції. Якщо так, то сума транзакції додається до балансу користувача
+                if (tx.To == transaction.From)
                 {
                     balance += tx.Amount;
                 }
             }
-            return balance >= amount;
+            return balance >= transaction.Amount;
         }
 
         public decimal GetAvailableBalance(string address, List<Block> chain, List<Transaction> transactionPool)

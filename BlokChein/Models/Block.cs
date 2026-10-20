@@ -14,6 +14,7 @@ namespace BlokChein.Models
         public DateTime Timestamp { get; set; }
         public List<Transaction> Transactions { get; set; } = new List<Transaction>();
 
+
         public string Hash { get; set; }
 
         public string PrevHash { get; set; }
@@ -23,5 +24,6 @@ namespace BlokChein.Models
         public int Difficulty { get; set; }
 
         public double MiningDuration { get; set; }
+        public string MerkleRoot { get; set; } = "";
     }
 }

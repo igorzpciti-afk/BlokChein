@@ -146,6 +146,9 @@ namespace BlokChein.Services
                 Console.WriteLine($"Timestamp: {block.Timestamp}");
                 Console.WriteLine($"Hash: {block.Hash}");
                 Console.WriteLine($"PrevHash: {block.PrevHash}");
+                Console.WriteLine($"MerkleRoot: {block.MerkleRoot}");
+
+
                 if (block.Transactions != null)
                 {
                     Console.WriteLine("Transactions:");

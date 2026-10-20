@@ -11,10 +11,12 @@ namespace BlokChein.Models
         public List<Transaction> MemPool { get; set; } = new List<Transaction>();
         public int Difficulty { get; set; } = 4;
 
-        private decimal _minerReward = 50;
+        private int _halvingInterval = 4;
+        private decimal _initialReward = 64m;
 
-        private readonly double _targetBlockTime;
-        private readonly int _adjustmentInterval;
+        private readonly double _targetBlockTime=10000;
+        private readonly int _adjustmentInterval=2;
+        private decimal _minimumReward = 2m;
         private readonly MiningService _miningService;
         private readonly HashingService _hashingService;
         private readonly TransactionService _transactionService;
@@ -38,6 +40,13 @@ namespace BlokChein.Models
 
         private void AddGenesisBlock()
         {
+            var merkleRoot = _hashingService.ComputeMerkleRoot(new List<Transaction>
+            {
+                new Transaction("SYSTEM", "Alice", 50m, 0m, new byte[] { 0x00 })
+                {
+                    IsCoinbase = true 
+                }
+            });
             byte[] systemPublicKey = new byte[] { 0x00 };
 
             var genesisBlock = new Block
@@ -45,7 +54,10 @@ namespace BlokChein.Models
                 Index = 0,
                 Transactions = new List<Transaction>
                 {
-                    new Transaction("SYSTEM", "Alice", 50m, systemPublicKey)
+                    new Transaction("SYSTEM", "Alice", 50m, 0m, systemPublicKey)
+                                {
+                                    IsCoinbase = true 
+                                }
                 },
                 PrevHash = "0",
                 Difficulty = Difficulty,
@@ -92,18 +104,14 @@ namespace BlokChein.Models
         //    }
         //}
 
-
         public void MinePendingTransaction(string minerAddress)
         {
             var validTransactions = new List<Transaction>();
-
             var tempChain = new List<Block>(Chain);
-
             Block lastBlock = Chain[^1];
             var simulatedTransactions = new List<Transaction>();
 
-            var coinbase = _transactionService.CreateCoinbaseTransaction(minerAddress, _minerReward);
-            simulatedTransactions.Add(coinbase);
+            decimal totalFees = 0;
 
             foreach (var transaction in MemPool)
             {
@@ -112,6 +120,7 @@ namespace BlokChein.Models
                 {
                     validTransactions.Add(transaction);
                     simulatedTransactions.Add(transaction);
+                    totalFees += transaction.Fee;
                 }
                 else
                 {
@@ -119,15 +128,22 @@ namespace BlokChein.Models
                 }
             }
 
+            int newBlockIndex = lastBlock.Index + 1;
+            decimal currentReward = GetMiningReward(newBlockIndex);
+
+            var coinbase = _transactionService.CreateCoinbaseTransaction(minerAddress, currentReward + totalFees);
+
             var newBlock = new Block()
             {
-                Index = lastBlock.Index + 1,
+                Index = newBlockIndex,
                 Transactions = validTransactions,
                 PrevHash = lastBlock.Hash,
                 Difficulty = Difficulty,
             };
 
             newBlock.Transactions.Insert(0, coinbase);
+
+            newBlock.MerkleRoot = _hashingService.ComputeMerkleRoot(newBlock.Transactions);
 
             _miningService.MineBlock(newBlock, Difficulty);
             Chain.Add(newBlock);
@@ -138,6 +154,14 @@ namespace BlokChein.Models
             {
                 AdjustDifficulty();
             }
+        }
+        public Transaction CreateRewardTransaction(string minerAddress, decimal reward)
+        {
+            var rewardTx = new Transaction("RewardFee", minerAddress, reward, 0, null)
+            {
+                IsCoinbase = true
+            };
+            return rewardTx;
         }
 
         public bool AddTransaction(Transaction transaction)
@@ -152,7 +176,6 @@ namespace BlokChein.Models
             MemPool.Add(transaction);
             return true;
         }
-
 
         private void AdjustDifficulty()
         {
@@ -208,12 +231,25 @@ namespace BlokChein.Models
                             return false;
                         }
 
-                        if (tx.Amount != _minerReward)
+                        decimal expectedReward = GetMiningReward(block.Index);
+
+                        decimal blockFees = block.Transactions
+                            .Where(t => !t.IsCoinbase && t.From != "Coinbase" && t.From != "SYSTEM")
+                            .Sum(t => t.Fee);
+
+                        decimal totalExpectedCoinbase = expectedReward + blockFees;
+
+                        if (tx.Amount != totalExpectedCoinbase)
                         {
-                            Console.WriteLine($"Block #{block.Index} INVALID");
-                            Console.WriteLine($"Причина: неправильна нагорода майнеру. Дозволено {_minerReward}, записано {tx.Amount}.");
+                            Console.WriteLine($"Блок #{block.Index}");
+                            Console.WriteLine($"Очікувана нагорода: {expectedReward}");
+                            Console.WriteLine($"Комісії: {blockFees}");
+                            Console.WriteLine($"Очікуваний Coinbase: {totalExpectedCoinbase}");
+                            Console.WriteLine($"Фактичний Coinbase: {tx.Amount}");
+                            Console.WriteLine("НЕВАЛІДНО");
                             return false;
                         }
+
 
                         if (!walletBalances.ContainsKey(tx.To))
                             walletBalances[tx.To] = 0;
@@ -268,19 +304,108 @@ namespace BlokChein.Models
                 var currentBlock = Chain[i];
                 var prevBlock = Chain[i - 1];
 
+                // Обчислення хешу поточного блоку за допомогою сервісу хешування. Це дозволяє перевірити, чи дані в блоці не були змінені після його створення.
                 string currentHash = _hashingService.ComputeHash(currentBlock);
+
+                // Перевірка, чи обчислений хеш поточного блоку відповідає збереженому хешу в блоці. Якщо ні, блокчейн вважається недійсним.
                 if (currentBlock.Hash != currentHash)
                     return false;
 
+                // Перевірка, чи хеш попереднього блоку відповідає хешу, збереженому в поточному блоці. Якщо ні, блокчейн вважається недійсним.
                 if (prevBlock.Hash != currentBlock.PrevHash)
                     return false;
 
-                string target = new string('0', currentBlock.Difficulty);
+                var target = new string('0', currentBlock.Difficulty); //"0000..."
+                                                                       // Перевірка, чи хеш поточного блоку починається з потрібної кількості нулів (визначеної параметром difficulty). Якщо ні, блокчейн вважається недійсним.
                 if (!currentBlock.Hash.StartsWith(target))
+                {
                     return false;
+                }
+
+                // Merkle Root validation
+                if (currentBlock.MerkleRoot != _hashingService.ComputeMerkleRoot(currentBlock.Transactions))
+                {
+                    return false;
+                }
             }
 
             return true;
+        }
+
+        public decimal GetMiningReward(int blockIndex)
+        {
+            if (blockIndex <= 0) return _initialReward; 
+
+            int halvings = (blockIndex - 1) / _halvingInterval;
+            decimal reward = _initialReward / (decimal)Math.Pow(2, halvings);
+
+            return Math.Max(reward, _minimumReward);
+        }
+
+        public bool ValidateMiningRewards()
+        {
+            for (int i = 1; i < Chain.Count; i++)
+            {
+                var block = Chain[i];
+
+                var coinbaseTx = block.Transactions.FirstOrDefault(tx => tx.IsCoinbase || tx.From == "Coinbase" || tx.From == "SYSTEM");
+                if (coinbaseTx == null)
+                {
+                    Console.WriteLine($"Block #{block.Index} INVALID: Відсутня Coinbase-транзакція.");
+                    return false;
+                }
+
+                decimal fees = block.Transactions
+                    .Where(tx => !tx.IsCoinbase && tx.From != "Coinbase" && tx.From != "SYSTEM")
+                    .Sum(tx => tx.Fee);
+
+                decimal expectedReward = GetMiningReward(block.Index);
+                decimal expectedCoinbase = expectedReward + fees;
+
+                if (coinbaseTx.Amount != expectedCoinbase)
+                {
+                    Console.WriteLine($"Block #{block.Index}");
+                    Console.WriteLine($"Expected Reward: {expectedReward}");
+                    Console.WriteLine($"Fees: {fees}");
+                    Console.WriteLine($"Expected Coinbase: {expectedCoinbase}");
+                    Console.WriteLine($"Actual Coinbase: {coinbaseTx.Amount}");
+                    Console.WriteLine("INVALID");
+                    return false;
+                }
+            }
+
+            Console.WriteLine("Усі нагороди у блокчейні валідні.");
+            return true;
+        }
+
+        public decimal GetTotalCoinsCreated()
+        {
+            decimal totalCoins = 0;
+
+            foreach (var block in Chain)
+            {
+                totalCoins += GetMiningReward(block.Index);
+            }
+
+            return totalCoins;
+        }
+
+        public void TamperCoinbase(int blockIndex = 9)
+        {
+            var targetBlock = Chain.FirstOrDefault(b => b.Index == blockIndex);
+            if (targetBlock != null)
+            {
+                var coinbaseTx = targetBlock.Transactions.FirstOrDefault(tx => tx.IsCoinbase || tx.From == "Coinbase" || tx.From == "SYSTEM");
+                if (coinbaseTx != null)
+                {
+                    coinbaseTx.Amount += 100m;
+                    Console.WriteLine($"[УСПІХ] Нагороду Coinbase у блоці #{targetBlock.Index} штучно змінено!");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"Блок #{blockIndex} не знайдено. Спочатку змайніть достатню кількість блоків.");
+            }
         }
 
         public void TamperBlockData()
@@ -322,6 +447,11 @@ namespace BlokChein.Models
             MemPool.Remove(transaction);
             Console.WriteLine($"[УСПІХ] Транзакцію {transactionId} успішно скасовано та видалено з Mempool.");
             return true;
+        }
+
+        public void PrintMerkleTree(List<Transaction> transactions)
+        {
+            _hashingService.PrintMerkleTree(transactions);
         }
     }
 }

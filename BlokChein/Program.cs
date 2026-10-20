@@ -11,8 +11,6 @@ var transactionService = new TransactionService();
 var walletService = new WalletService();
 var balanceService = new BalanceService();
 
-
-
 var aliceWallet = walletService.CreateWallet("Alice");
 var bobWallet = walletService.CreateWallet("Bob");
 var charlieWallet = walletService.CreateWallet("Charlie");
@@ -25,17 +23,21 @@ displayService.ShowWallet(daveWallet);
 
 while (true)
 {
-    Console.WriteLine("\n1. Mine Block");
-    Console.WriteLine("2. Display Blockchain");
-    Console.WriteLine("3. Validate Blockchain");
-    Console.WriteLine("4. Show Wallet Balances");
-    Console.WriteLine("5. AddTransaction");
-    Console.WriteLine("6. Show Transaction Pool");
-    Console.WriteLine("7. Validate Economy");
-    Console.WriteLine("8. Tamper Economy (Break a Block)");
-    Console.WriteLine("9. Cancel Transaction from Mempool");
-    Console.WriteLine("10. Exit");
-    Console.Write("Your choice: ");
+    Console.WriteLine("\n1. Змайнити блок");
+    Console.WriteLine("2. Показати блокчейн");
+    Console.WriteLine("3. Перевірити валідність блокчейна");
+    Console.WriteLine("4. Показати баланси гаманців");
+    Console.WriteLine("5. Додати транзакцію");
+    Console.WriteLine("6. Показати пул транзакцій");
+    Console.WriteLine("7. Перевірити економіку");
+    Console.WriteLine("8. Пошкодити економіку (зламати блок)");
+    Console.WriteLine("9. Скасувати транзакцію з мемпулу");
+    Console.WriteLine("10. Вивести дерево Меркла");
+    Console.WriteLine("11. Перевірити нагороди майнерів (ValidateMiningRewards)");
+    Console.WriteLine("12. Показати загальну кількість монет (GetTotalCoinsCreated)");
+    Console.WriteLine("13. Підробити Coinbase у блоці #9 (TamperCoinbase)");
+    Console.WriteLine("14. Вихід");
+    Console.Write("Ваш вибір: ");
 
     string choice = Console.ReadLine();
 
@@ -43,7 +45,7 @@ while (true)
     {
         switch (choice)
         {
-            case "1": 
+            case "1":
                 testBlockChain.MinePendingTransaction(aliceWallet.Address);
                 Console.WriteLine("Block successfully mined and added to the blockchain!");
                 break;
@@ -57,7 +59,7 @@ while (true)
                 Console.WriteLine($"Blockchain is valid: {(isValid ? "true" : "false")}");
                 break;
 
-            case "4": 
+            case "4":
                 Console.WriteLine($"Alice Balance (Available): {balanceService.GetAvailableBalance(aliceWallet.Address, testBlockChain.Chain, testBlockChain.MemPool)}");
                 Console.WriteLine($"Bob Balance (Available): {balanceService.GetAvailableBalance(bobWallet.Address, testBlockChain.Chain, testBlockChain.MemPool)}");
                 Console.WriteLine($"Charlie Balance (Available): {balanceService.GetAvailableBalance(charlieWallet.Address, testBlockChain.Chain, testBlockChain.MemPool)}");
@@ -107,26 +109,29 @@ while (true)
                     var senderWallet = wallets[senderChoice];
                     var recipientWallet = wallets[recipientChoice];
 
-                    var newTx = transactionService.CreateTransaction(senderWallet, recipientWallet.Address, amount);
+                    var newTx = transactionService.CreateTransaction(senderWallet, recipientWallet.Address, amount, 0m);
                     testBlockChain.AddTransaction(newTx);
 
                     Console.WriteLine($"[SUCCESS] Transaction added to MemPool: {senderWallet.Name} -> {recipientWallet.Name} ({amount} coins)");
                 }
                 else
                 {
-                    Console.WriteLine("Error: Invalid amount enterred!");
+                    Console.WriteLine("Error: Invalid amount entered!");
                 }
                 break;
 
-            case "6": 
+            case "6":
                 displayService.ShowMemPool(testBlockChain.MemPool);
                 break;
-            case "7": 
+
+            case "7":
                 testBlockChain.ValidateEconomy();
                 break;
+
             case "8":
                 testBlockChain.TamperBlockData();
                 break;
+
             case "9":
                 Console.Write("Enter Transaction ID to cancel: ");
                 string cancelTxId = Console.ReadLine();
@@ -135,7 +140,38 @@ while (true)
                 string senderAddress = Console.ReadLine();
                 testBlockChain.CancelTransaction(cancelTxId, senderAddress);
                 break;
+
             case "10":
+                if (testBlockChain.Chain.Count > 0)
+                {
+                    foreach (var block in testBlockChain.Chain)
+                    {
+                        Console.WriteLine($"\n========================================");
+                        Console.WriteLine($"--- Дерево Меркла для блоку {block.Index} ---");
+                        Console.WriteLine($"========================================");
+                        testBlockChain.PrintMerkleTree(block.Transactions);
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Блокчейн порожній.");
+                }
+                break;
+
+            case "11":
+                testBlockChain.ValidateMiningRewards();
+                break;
+
+            case "12":
+                decimal totalCoins = testBlockChain.GetTotalCoinsCreated();
+                Console.WriteLine($"Загальна кількість створених нових монет (без комісій): {totalCoins}");
+                break;
+
+            case "13":
+                testBlockChain.TamperCoinbase(9);
+                break;
+
+            case "14":
                 return;
 
             default:
