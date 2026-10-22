@@ -1,12 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
+﻿
 using BlokChein.Models;
 using BlokChein.Services;
+using System.Text.Json;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-var displayService = new DisplayService();
 var testBlockChain = new BlockChainService(1, 10000, 2);
+var displayService = new DisplayService();
 var transactionService = new TransactionService();
 var walletService = new WalletService();
 var balanceService = new BalanceService();
@@ -15,6 +15,52 @@ var aliceWallet = walletService.CreateWallet("Alice");
 var bobWallet = walletService.CreateWallet("Bob");
 var charlieWallet = walletService.CreateWallet("Charlie");
 var daveWallet = walletService.CreateWallet("Dave");
+int port = int.Parse(args[0]);
+
+var nodes = args.Skip(1).Select(x => {
+    var p = x.Split(":");
+    return new Node(p[0], int.Parse(p[1]));
+}).ToList();
+
+
+
+
+var networkService = new NetworkService(port, nodes);
+networkService.Start(async (type, message) =>
+{
+    Console.WriteLine($"Received message of type {type}: {message}");
+    switch (type)
+    {
+        case "CHAIN":
+            var chain = JsonSerializer.Deserialize<List<Block>>(message);
+            if (chain != null)
+            {
+                var isreplace = testBlockChain.TryReplaceChain(chain);
+                Console.WriteLine("IS NEW CHAIN isreplace");
+            }
+            break;
+        case "GET_CHAIN":
+            await networkService.BroadCastAsync("CHAIN", testBlockChain.Chain);
+            break;
+        case "Transaction":
+            var transaction = JsonSerializer.Deserialize<Transaction>(message);
+            if (transaction != null)
+            {
+                Console.WriteLine($"Received transaction from {transaction.From} to {transaction.To} for amount...");
+                testBlockChain.AddTransaction(transaction);
+            }
+            break;
+        case "Block":
+            var block = JsonSerializer.Deserialize<Block>(message);
+            if (block != null)
+            {
+                Console.WriteLine($"Received block with index {block.Index} and hash {block.Hash}");
+                testBlockChain.TryAddReceivedBlock(block);
+            }
+            break;
+    }
+});
+
 
 displayService.ShowWallet(aliceWallet);
 displayService.ShowWallet(bobWallet);
@@ -36,7 +82,9 @@ while (true)
     Console.WriteLine("11. Перевірити нагороди майнерів (ValidateMiningRewards)");
     Console.WriteLine("12. Показати загальну кількість монет (GetTotalCoinsCreated)");
     Console.WriteLine("13. Підробити Coinbase у блоці #9 (TamperCoinbase)");
-    Console.WriteLine("14. Вихід");
+    Console.WriteLine("14. Синхронізація");
+    Console.WriteLine("15. Тест дубліката транзакції (Duplicate)");
+    Console.WriteLine("16. Вихід");
     Console.Write("Ваш вибір: ");
 
     string choice = Console.ReadLine();
@@ -46,16 +94,16 @@ while (true)
         switch (choice)
         {
             case "1":
-                testBlockChain.MinePendingTransaction(aliceWallet.Address);
-                Console.WriteLine("Block successfully mined and added to the blockchain!");
-                break;
+                var newBlock = testBlockChain.MinePendingTransaction(aliceWallet.Address);
+                networkService.BroadCastAsync("Block", newBlock);
+                 break;
 
             case "2":
                 displayService.ShowChain(testBlockChain.Chain);
                 break;
 
             case "3":
-                bool isValid = testBlockChain.IsValid();
+                bool isValid = testBlockChain.IsValid(testBlockChain.Chain);
                 Console.WriteLine($"Blockchain is valid: {(isValid ? "true" : "false")}");
                 break;
 
@@ -67,6 +115,7 @@ while (true)
                 break;
 
             case "5":
+
                 var wallets = new Dictionary<string, Wallet>
                 {
                     { "1", aliceWallet },
@@ -110,9 +159,14 @@ while (true)
                     var recipientWallet = wallets[recipientChoice];
 
                     var newTx = transactionService.CreateTransaction(senderWallet, recipientWallet.Address, amount, 0m);
-                    testBlockChain.AddTransaction(newTx);
 
-                    Console.WriteLine($"[SUCCESS] Transaction added to MemPool: {senderWallet.Name} -> {recipientWallet.Name} ({amount} coins)");
+                    // Викликаємо метод і перевіряємо результат (true/false)
+                    bool isAdded = testBlockChain.AddTransaction(newTx);
+
+                    if (isAdded)
+                    {
+                        Console.WriteLine($"[SUCCESS] Transaction added to MemPool: {senderWallet.Name} -> {recipientWallet.Name} ({amount} coins)");
+                    }
                 }
                 else
                 {
@@ -170,8 +224,21 @@ while (true)
             case "13":
                 testBlockChain.TamperCoinbase(9);
                 break;
-
             case "14":
+                await networkService.BroadCastAsync("GET_CHAIN", "");
+                break;
+            case "15":
+                Console.WriteLine("\n--- Ручний тест дубліката ---");
+                var duplicateTestTx = transactionService.CreateTransaction(aliceWallet, bobWallet.Address, 15m, 0m);
+
+                Console.WriteLine("Додаємо першу транзакцію:");
+                testBlockChain.AddTransaction(duplicateTestTx);
+
+                Console.WriteLine("Спроба додати ту саму транзакцію вдруге:");
+                testBlockChain.AddTransaction(duplicateTestTx);
+                break;
+
+            case "16":
                 return;
 
             default:
